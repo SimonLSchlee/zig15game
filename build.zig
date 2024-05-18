@@ -2,9 +2,9 @@ const std = @import("std");
 
 fn addAssets(exe: *std.Build.Step.Compile) void {
     const assets = [_]struct { []const u8, []const u8 }{
-        .{ "assets/movesuccess.wav", "movesuccess" },
-        .{ "assets/movefailed.wav", "movefailed" },
-        .{ "assets/winner.wav", "winner" },
+        .{ "assets/movesuccess.qoa", "movesuccess" },
+        .{ "assets/movefailed.qoa", "movefailed" },
+        .{ "assets/winner.qoa", "winner" },
     };
 
     for (assets) |asset| {

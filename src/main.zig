@@ -12,9 +12,9 @@ const Sounds = struct {
 
     fn init() Sounds {
         return .{
-            .success = loadSound(@embedFile("movesuccess"), 0.5),
-            .failed = loadSound(@embedFile("movefailed"), 0.5),
-            .winner = loadSound(@embedFile("winner"), 1.0),
+            .success = loadSound(@embedFile("movesuccess"), 0.5, "movesuccess.qoa"),
+            .failed = loadSound(@embedFile("movefailed"), 0.5, "movefailed.qoa"),
+            .winner = loadSound(@embedFile("winner"), 1.0, "winner.qoa"),
         };
     }
     fn deinit(self: *Sounds) void {
@@ -22,8 +22,10 @@ const Sounds = struct {
         ray.UnloadSound(self.failed);
         ray.UnloadSound(self.winner);
     }
-    fn loadSound(comptime data: anytype, volume: f32) ray.Sound {
-        const wave = ray.LoadWaveFromMemory(".wav", data.ptr, data.len);
+    fn loadSound(comptime data: anytype, volume: f32, export_name: [:0]const u8) ray.Sound {
+        _ = export_name; // autofix
+        const wave = ray.LoadWaveFromMemory(".qoa", data.ptr, data.len);
+        // _ = ray.ExportWave(wave, export_name);
         defer ray.UnloadWave(wave);
         const sound = ray.LoadSoundFromWave(wave);
         ray.SetSoundVolume(sound, volume);
