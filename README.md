@@ -2,8 +2,8 @@
 A [zig](https://ziglang.org/download/) 15 puzzle game based on [15 puzzle game](https://ziggit.dev/t/15-puzzle-game/4350) by Chris Boesch,  
 changed from a console/terminal implementation to a [raylib](https://www.raylib.com/) implementation.
 
-Added simple raylib gui and sound effects.
-If you are a vim user (or want to train vim motions) play with hjkl, otherwise use wasd or arrow keys!
+Added simple raylib gui and sound effects.  
+If you are a vim user (or want to train vim keys) play with hjkl, otherwise use wasd or arrow keys!
 
 ## install
 ```bash
