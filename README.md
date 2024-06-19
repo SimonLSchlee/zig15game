@@ -12,8 +12,7 @@ cd zig15game
 zig build run
 ```
 
-tested with zig version: `0.12.0`  
-using raylib commit: https://github.com/raysan5/raylib/tree/b03c8ba945a06ed1ec3d6ed7c3185e1264909323
+tested with zig version: `0.13.0`  
 
 ## other raylib projects
 
