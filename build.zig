@@ -1,6 +1,6 @@
 const std = @import("std");
 
-fn addAssets(exe: *std.Build.Step.Compile) void {
+fn addAssets(b: *std.Build, exe: *std.Build.Step.Compile) void {
     const assets = [_]struct { []const u8, []const u8 }{
         .{ "assets/movesuccess.qoa", "movesuccess" },
         .{ "assets/movefailed.qoa", "movefailed" },
@@ -9,7 +9,7 @@ fn addAssets(exe: *std.Build.Step.Compile) void {
 
     for (assets) |asset| {
         const path, const name = asset;
-        exe.root_module.addAnonymousImport(name, .{ .root_source_file = .{ .path = path } });
+        exe.root_module.addAnonymousImport(name, .{ .root_source_file = b.path(path) });
     }
 }
 
@@ -32,11 +32,11 @@ pub fn build(b: *std.Build) void {
         .name = "zig15game",
         // In this case the main source file is merely a path, however, in more
         // complicated build scripts, this could be a generated file.
-        .root_source_file = .{ .path = "src/main.zig" },
+        .root_source_file = b.path("src/main.zig"),
         .target = target,
         .optimize = optimize,
     });
-    addAssets(exe);
+    addAssets(b, exe);
 
     const raylib_optimize = b.option(
         std.builtin.OptimizeMode,
@@ -88,11 +88,11 @@ pub fn build(b: *std.Build) void {
     // Creates a step for unit testing. This only builds the test executable
     // but does not run it.
     const unit_tests = b.addTest(.{
-        .root_source_file = .{ .path = "src/main.zig" },
+        .root_source_file = b.path("src/main.zig"),
         .target = target,
         .optimize = optimize,
     });
-    addAssets(unit_tests);
+    addAssets(b, unit_tests);
 
     const run_unit_tests = b.addRunArtifact(unit_tests);
 
