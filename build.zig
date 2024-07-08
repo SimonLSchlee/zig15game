@@ -1,4 +1,5 @@
 const std = @import("std");
+const builtin = @import("builtin");
 
 fn addAssets(b: *std.Build, exe: *std.Build.Step.Compile) void {
     const assets = [_]struct { []const u8, []const u8 }{
@@ -13,30 +14,36 @@ fn addAssets(b: *std.Build, exe: *std.Build.Step.Compile) void {
     }
 }
 
-// Although this function looks imperative, note that its job is to
-// declaratively construct a build graph that will be executed by an external
-// runner.
-pub fn build(b: *std.Build) void {
-    // Standard target options allows the person running `zig build` to choose
-    // what target to build for. Here we do not override the defaults, which
-    // means any target is allowed, and the default is native. Other options
-    // for restricting supported target set are available.
-    const target = b.standardTargetOptions(.{});
+const App = struct {
+    name: []const u8,
+    path: std.Build.LazyPath,
+};
 
-    // Standard optimization options allow the person running `zig build` to select
-    // between Debug, ReleaseSafe, ReleaseFast, and ReleaseSmall. Here we do not
-    // set a preferred release mode, allowing the user to decide how to optimize.
+// wasm references used to create this:
+// https://github.com/permutationlock/zig_emscripten_threads/blob/main/build.zig
+// https://ziggit.dev/docs?topic=3531
+// https://ziggit.dev/t/state-of-concurrency-support-on-wasm32-freestanding/1465/8
+// https://ziggit.dev/t/why-suse-offset-converter-is-needed/4131/3
+// https://github.com/raysan5/raylib/blob/master/src/build.zig
+// https://github.com/silbinarywolf/3d-raylib-toy-project/blob/main/raylib-zig/build.zig
+// https://github.com/ziglang/zig/issues/10836
+// https://github.com/bluesillybeard/ZigAndRaylibSetup/blob/main/build.zig
+// https://github.com/Not-Nik/raylib-zig/issues/24
+// https://github.com/raysan5/raylib/wiki/Working-for-Web-%28HTML5%29
+
+pub fn build(b: *std.Build) void {
+    const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
 
-    const exe = b.addExecutable(.{
-        .name = "zig15game",
-        // In this case the main source file is merely a path, however, in more
-        // complicated build scripts, this could be a generated file.
-        .root_source_file = b.path("src/main.zig"),
-        .target = target,
-        .optimize = optimize,
+    const wasm_target = b.resolveTargetQuery(.{
+        .cpu_arch = .wasm32,
+        .cpu_model = .{ .explicit = &std.Target.wasm.cpu.mvp },
+        .cpu_features_add = std.Target.wasm.featureSet(&.{
+            .atomics,
+            .bulk_memory,
+        }),
+        .os_tag = .emscripten,
     });
-    addAssets(b, exe);
 
     const raylib_optimize = b.option(
         std.builtin.OptimizeMode,
@@ -49,56 +56,133 @@ pub fn build(b: *std.Build) void {
         "strip",
         "Strip debug info to reduce binary size, defaults to false",
     ) orelse false;
-    exe.root_module.strip = strip;
 
     const raylib_dep = b.dependency("raylib", .{
-        .target = target,
+        .target = wasm_target,
         .optimize = raylib_optimize,
+        // .rmodels = false,
+        // .raudio = false,
     });
-    exe.linkLibrary(raylib_dep.artifact("raylib"));
+    const raylib_artifact = raylib_dep.artifact("raylib");
 
-    // This declares intent for the executable to be installed into the
-    // standard location when the user invokes the "install" step (the default
-    // step when running `zig build`).
-    b.installArtifact(exe);
+    const app = App{
+        .name = "zig15game",
+        .path = b.path("src/main.zig"),
+    };
 
-    // This *creates* a Run step in the build graph, to be executed when another
-    // step is evaluated that depends on it. The next line below will establish
-    // such a dependency.
-    const run_cmd = b.addRunArtifact(exe);
+    const is_wasm = target.result.cpu.arch == .wasm32;
+    if (is_wasm) {
+        if (b.sysroot == null) {
+            @panic("Pass '--sysroot \"[path to emsdk installation]/upstream/emscripten\"'");
+        }
 
-    // By making the run step depend on the install step, it will be run from the
-    // installation directory rather than directly from within the cache directory.
-    // This is not necessary, however, if the application depends on other installed
-    // files, this ensures they will be present and in the expected location.
-    run_cmd.step.dependOn(b.getInstallStep());
+        const exe_lib = b.addStaticLibrary(.{
+            .name = app.name,
+            .root_source_file = app.path,
+            .target = wasm_target,
+            .optimize = optimize,
+            .link_libc = true,
+        });
+        exe_lib.shared_memory = true;
+        exe_lib.root_module.single_threaded = false;
 
-    // This allows the user to pass arguments to the application in the build
-    // command itself, like this: `zig build run -- arg1 arg2 etc`
-    if (b.args) |args| {
-        run_cmd.addArgs(args);
+        exe_lib.linkLibrary(raylib_artifact);
+        exe_lib.addIncludePath(raylib_dep.path("src"));
+
+        const sysroot_include = b.pathJoin(&.{ b.sysroot.?, "cache", "sysroot", "include" });
+        var dir = std.fs.openDirAbsolute(sysroot_include, std.fs.Dir.OpenDirOptions{ .access_sub_paths = true, .no_follow = true }) catch @panic("No emscripten cache. Generate it!");
+        dir.close();
+
+        exe_lib.addIncludePath(.{ .cwd_relative = sysroot_include });
+        addAssets(b, exe_lib);
+
+        const emcc_exe = switch (builtin.os.tag) { // TODO bundle emcc as a build dependency
+            .windows => "emcc.bat",
+            else => "emcc",
+        };
+
+        const emcc_exe_path = b.pathJoin(&.{ b.sysroot.?, emcc_exe });
+        const emcc_command = b.addSystemCommand(&[_][]const u8{emcc_exe_path});
+        emcc_command.addArgs(&[_][]const u8{
+            "-o",
+            "zig-out/web/index.html",
+            "-sFULL-ES3=1",
+            "-sUSE_GLFW=3",
+            "-O3",
+
+            // "-sAUDIO_WORKLET=1",
+            // "-sWASM_WORKERS=1",
+
+            "-pthread",
+            "-sASYNCIFY",
+            "-sPTHREAD_POOL_SIZE=4",
+            "-sINITIAL_MEMORY=167772160",
+            //"-sEXPORTED_FUNCTIONS=_main,__builtin_return_address",
+
+            // USE_OFFSET_CONVERTER required for @returnAddress used in
+            // std.mem.Allocator interface
+            "-sUSE_OFFSET_CONVERTER",
+            "--shell-file",
+            b.path("src/shell.html").getPath(b),
+        });
+
+        const link_items: []const *std.Build.Step.Compile = &.{
+            raylib_artifact,
+            exe_lib,
+        };
+        for (link_items) |item| {
+            emcc_command.addFileArg(item.getEmittedBin());
+            emcc_command.step.dependOn(&item.step);
+        }
+
+        // b.installDirectory(.{
+        //     .install_dir = .prefix,
+        //     .install_subdir = "web",
+        //     .source_dir = output_dir,
+        // });
+
+        // const install = b.addInstallDirectory(.{
+        //     .install_dir = .prefix,
+        //     .install_subdir = "web",
+        //     .source_dir = output_dir,
+        // });
+        // const copy_index = b.addInstallFileWithDir(index, .prefix, "web/index.html");
+        // install.step.dependOn(&copy_index.step);
+
+        // const install = b.addInstallFileWithDir(index, .prefix, "web/index.html");
+        const install = emcc_command;
+
+        b.default_step.dependOn(&install.step);
+    } else {
+        const exe = b.addExecutable(.{
+            .name = app.name,
+            .root_source_file = app.path,
+            .target = target,
+            .optimize = optimize,
+        });
+        addAssets(b, exe);
+        exe.root_module.strip = strip;
+        exe.linkLibrary(raylib_artifact);
+        b.installArtifact(exe);
+
+        const run_cmd = b.addRunArtifact(exe);
+        run_cmd.step.dependOn(b.getInstallStep());
+        if (b.args) |args| {
+            run_cmd.addArgs(args);
+        }
+
+        const run_step = b.step("run", "Run the app");
+        run_step.dependOn(&run_cmd.step);
+
+        const unit_tests = b.addTest(.{
+            .root_source_file = b.path("src/main.zig"),
+            .target = target,
+            .optimize = optimize,
+        });
+        addAssets(b, unit_tests);
+
+        const run_unit_tests = b.addRunArtifact(unit_tests);
+        const test_step = b.step("test", "Run unit tests");
+        test_step.dependOn(&run_unit_tests.step);
     }
-
-    // This creates a build step. It will be visible in the `zig build --help` menu,
-    // and can be selected like this: `zig build run`
-    // This will evaluate the `run` step rather than the default, which is "install".
-    const run_step = b.step("run", "Run the app");
-    run_step.dependOn(&run_cmd.step);
-
-    // Creates a step for unit testing. This only builds the test executable
-    // but does not run it.
-    const unit_tests = b.addTest(.{
-        .root_source_file = b.path("src/main.zig"),
-        .target = target,
-        .optimize = optimize,
-    });
-    addAssets(b, unit_tests);
-
-    const run_unit_tests = b.addRunArtifact(unit_tests);
-
-    // Similar to creating the run step earlier, this exposes a `test` step to
-    // the `zig build --help` menu, providing a way for the user to request
-    // running the unit tests.
-    const test_step = b.step("test", "Run unit tests");
-    test_step.dependOn(&run_unit_tests.step);
 }
