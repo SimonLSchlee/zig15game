@@ -135,23 +135,7 @@ pub fn build(b: *std.Build) void {
             emcc_command.step.dependOn(&item.step);
         }
 
-        // b.installDirectory(.{
-        //     .install_dir = .prefix,
-        //     .install_subdir = "web",
-        //     .source_dir = output_dir,
-        // });
-
-        // const install = b.addInstallDirectory(.{
-        //     .install_dir = .prefix,
-        //     .install_subdir = "web",
-        //     .source_dir = output_dir,
-        // });
-        // const copy_index = b.addInstallFileWithDir(index, .prefix, "web/index.html");
-        // install.step.dependOn(&copy_index.step);
-
-        // const install = b.addInstallFileWithDir(index, .prefix, "web/index.html");
         const install = emcc_command;
-
         b.default_step.dependOn(&install.step);
     } else {
         const exe = b.addExecutable(.{
