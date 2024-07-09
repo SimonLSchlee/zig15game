@@ -44,6 +44,8 @@ pub fn build(b: *std.Build) void {
         }),
         .os_tag = .emscripten,
     });
+    const is_wasm = target.result.cpu.arch == .wasm32;
+    const actual_target = if (is_wasm) wasm_target else target;
 
     const raylib_optimize = b.option(
         std.builtin.OptimizeMode,
@@ -58,10 +60,9 @@ pub fn build(b: *std.Build) void {
     ) orelse false;
 
     const raylib_dep = b.dependency("raylib", .{
-        .target = wasm_target,
+        .target = actual_target,
         .optimize = raylib_optimize,
-        // .rmodels = false,
-        // .raudio = false,
+        .rmodels = false,
     });
     const raylib_artifact = raylib_dep.artifact("raylib");
 
@@ -70,7 +71,6 @@ pub fn build(b: *std.Build) void {
         .path = b.path("src/main.zig"),
     };
 
-    const is_wasm = target.result.cpu.arch == .wasm32;
     if (is_wasm) {
         if (b.sysroot == null) {
             @panic("Pass '--sysroot \"[path to emsdk installation]/upstream/emscripten\"'");
@@ -83,7 +83,9 @@ pub fn build(b: *std.Build) void {
             .optimize = optimize,
             .link_libc = true,
         });
-        exe_lib.shared_memory = true;
+        // exe_lib.shared_memory = true;
+        // TODO currently deactivated because it seems as if it doesn't work with local hosting debug workflow
+        exe_lib.shared_memory = false;
         exe_lib.root_module.single_threaded = false;
 
         exe_lib.linkLibrary(raylib_artifact);
@@ -113,9 +115,11 @@ pub fn build(b: *std.Build) void {
             // "-sAUDIO_WORKLET=1",
             // "-sWASM_WORKERS=1",
 
-            "-pthread",
             "-sASYNCIFY",
-            "-sPTHREAD_POOL_SIZE=4",
+            // TODO currently deactivated because it seems as if it doesn't work with local hosting debug workflow
+            // "-pthread",
+            // "-sPTHREAD_POOL_SIZE=4",
+
             "-sINITIAL_MEMORY=167772160",
             //"-sEXPORTED_FUNCTIONS=_main,__builtin_return_address",
 
