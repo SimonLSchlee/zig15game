@@ -3,8 +3,9 @@
   <head>
     <meta charset="utf-8">
     <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
-    <title>Emscripten-Generated Code</title>
+    <title>15 Game</title>
     <style>
+      body { padding:0; margin:0; }
       .emscripten { padding-right: 0; margin-left: auto; margin-right: auto; display: block; }
       textarea.emscripten { font-family: monospace; width: 80%; }
       div.emscripten { text-align: center; }
@@ -47,7 +48,6 @@
     </style>
   </head>
   <body>
-    <hr/>
     <figure style="overflow:visible;" id="spinner"><div class="spinner"></div><center style="margin-top:0.5em"><strong>emscripten</strong></center></figure>
     <div class="emscripten" id="status">Downloading...</div>
     <div class="emscripten">
@@ -98,6 +98,12 @@
           // application robust, you may want to override this behavior before shipping!
           // See http://www.khronos.org/registry/webgl/specs/latest/1.0/#5.15.2
           canvas.addEventListener("webglcontextlost", (e) => { alert('WebGL context lost. You will need to reload the page.'); e.preventDefault(); }, false);
+          canvas.addEventListener("keydown", (e) => {
+            if(["Space","ArrowUp","ArrowDown","ArrowLeft","ArrowRight","F1","F3","F5"].indexOf(e.code) > -1) {
+              e.preventDefault();
+            }
+          }, false);
+          canvas.focus();
 
           return canvas;
         })(),
