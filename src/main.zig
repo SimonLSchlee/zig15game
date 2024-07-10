@@ -69,6 +69,7 @@ const Pos = @Vector(2, i32);
 const PosTwo: Pos = @splat(2);
 
 const Geometry = struct {
+    size: Pos,
     top_left: Pos,
     tile_size: Pos,
     center: Pos,
@@ -81,6 +82,7 @@ const Geometry = struct {
     fn updateSize(g: *Geometry) void {
         const w = ray.GetScreenWidth();
         const h = ray.GetScreenHeight();
+        g.size = Pos{ w, h };
 
         const vertical = @divFloor(h, 8);
         const horizontal = @divFloor(w, 5);
@@ -175,8 +177,9 @@ const Game = struct {
     }
 
     fn drawCenteredText(text: [:0]const u8, pos: Pos, font_size: i32, tint: ray.Color) void {
-        const p = pos - getExtent(text, font_size) / PosTwo;
-        ray.DrawText(text.ptr, p[0], p[1], font_size, tint);
+        const e = getExtent(text, font_size);
+        const p = pos - e / PosTwo;
+        ray.DrawText(text.ptr, p[0], p[1], e[1], tint);
     }
 
     fn drawToken(x: u3, y: u3, i: u8) void {
@@ -196,17 +199,20 @@ const Game = struct {
             fixes.DrawRectangleLines(p2[0], p2[1], s2[0], s2[1], c1);
 
             const p_center = p1 + g.tile_size / PosTwo;
-            const half_extent = getExtent(text, g.font_small) / PosTwo;
+            const e = getExtent(text, g.font_small);
+            const half_extent = e / PosTwo;
             const p3 = p_center - half_extent;
-            ray.DrawText(text.ptr, p3[0], p3[1], g.font_small, c1);
+            ray.DrawText(text.ptr, p3[0], p3[1], e[1], c1);
         }
     }
 
     fn getExtent(text: [:0]const u8, font_size: i32) Pos {
-        return Pos{
-            ray.MeasureText(text.ptr, font_size),
-            font_size,
-        };
+        const w = ray.MeasureText(text.ptr, font_size);
+        if (w < geometry.size[0]) {
+            return Pos{ w, font_size };
+        } else {
+            return getExtent(text, @divFloor(font_size, 4) * 3);
+        }
     }
 };
 var game = Game.init();
