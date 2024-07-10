@@ -82,8 +82,9 @@ const Geometry = struct {
         const w = ray.GetScreenWidth();
         const h = ray.GetScreenHeight();
 
-        const min = @min(w, h);
-        const part = @divFloor(min, 8);
+        const vertical = @divFloor(h, 8);
+        const horizontal = @divFloor(w, 5);
+        const part = @min(vertical, horizontal);
 
         g.font_smaller = @max(20, @divTrunc(part, 6) * 2);
         g.font_small = @divTrunc(part, 6) * 4;
@@ -244,6 +245,17 @@ fn directions(u: c_int, d: c_int, l: c_int, r: c_int) [4]KeyMove {
     };
 }
 fn getMove() Move {
+    const gesture = ray.GetGestureDetected();
+    if (gesture != ray.GESTURE_NONE) {
+        switch (gesture) {
+            ray.GESTURE_SWIPE_UP => return Move.up,
+            ray.GESTURE_SWIPE_DOWN => return Move.down,
+            ray.GESTURE_SWIPE_LEFT => return Move.left,
+            ray.GESTURE_SWIPE_RIGHT => return Move.right,
+            else => {},
+        }
+    }
+
     const arrows = directions(ray.KEY_UP, ray.KEY_DOWN, ray.KEY_LEFT, ray.KEY_RIGHT);
     const wasd = directions(ray.KEY_W, ray.KEY_S, ray.KEY_A, ray.KEY_D);
     const hjkl = directions(ray.KEY_K, ray.KEY_J, ray.KEY_H, ray.KEY_L);
@@ -275,6 +287,22 @@ fn restart() void {
     shuffle(50);
 }
 
+fn startGestureDetected() bool {
+    if (ray.IsKeyPressed(ray.KEY_ENTER)) return true;
+    if (ray.IsKeyPressed(ray.KEY_SPACE)) return true;
+    if (ray.IsKeyPressed(ray.KEY_S)) return true;
+
+    if (ray.IsMouseButtonPressed(ray.MOUSE_BUTTON_LEFT)) return true;
+    if (ray.IsMouseButtonPressed(ray.MOUSE_BUTTON_RIGHT)) return true;
+
+    const gesture = ray.GetGestureDetected();
+    if (gesture == ray.GESTURE_TAP) return true;
+    if (gesture == ray.GESTURE_DOUBLETAP) return true;
+    if (gesture == ray.GESTURE_HOLD) return true;
+
+    return false;
+}
+
 pub fn main() !void {
     const default_size = 400;
     const width = default_size;
@@ -294,18 +322,41 @@ pub fn main() !void {
     sounds = Sounds.init();
     defer sounds.deinit();
 
+    var started = false;
+    var paused = false;
+
     restart();
 
     var help = false;
     while (!ray.WindowShouldClose()) {
-        { // input
+        input: { // input
             if (ray.IsWindowResized()) geometry.updateSize();
+
+            if (!ray.IsAudioDeviceReady()) {
+                // Firefox disables audio playback until user interaction
+                // pause game to get user interaction
+                paused = true;
+                break :input;
+            }
+            if (!started or paused) {
+                if (startGestureDetected()) {
+                    started = true;
+                    paused = false;
+                } else {
+                    break :input;
+                }
+            }
+
             if (ray.IsKeyPressed(ray.KEY_F1)) help = !help;
             if (!help) {
                 if (ray.IsKeyPressed(ray.KEY_F3)) win();
                 if (ray.IsKeyPressed(ray.KEY_F5)) restart();
                 if (ray.IsKeyPressed(ray.KEY_ENTER)) restart();
-                if (!game.won) updateToken(getMove(), .player);
+                if (game.won) {
+                    if (startGestureDetected()) restart();
+                } else {
+                    updateToken(getMove(), .player);
+                }
             }
             if (ray.IsKeyPressed(ray.KEY_P)) sounds.toggle();
             if (ray.IsKeyPressed(ray.KEY_SPACE)) game.partyMore();
@@ -320,7 +371,16 @@ pub fn main() !void {
             if (help) {
                 drawHelp();
             } else {
-                game.drawBoard();
+                if (started) {
+                    if (paused) {
+                        Game.drawCenteredText("Paused", geometry.top_line, geometry.font_big, colors.solved);
+                    } else {
+                        game.drawBoard();
+                    }
+                } else {
+                    Game.drawCenteredText("Start Game!", geometry.top_line, geometry.font_big, colors.solved);
+                    Game.drawCenteredText("Enter / Click", geometry.bottom_line, geometry.font_big, colors.solved);
+                }
             }
         }
     }
