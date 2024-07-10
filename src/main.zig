@@ -4,6 +4,20 @@ const ray = @import("raylib.zig");
 
 // This is based on https://ziggit.dev/t/15-puzzle-game/4350
 
+const fixes = struct {
+    // raylibs DrawRectangleLines currently draws crooked lines
+    // but DrawRectangleLinesEx doesn't remove this if/when it has been fixed
+    fn DrawRectangleLines(x: c_int, y: c_int, w: c_int, h: c_int, color: ray.Color) void {
+        const rect = ray.Rectangle{
+            .x = @floatFromInt(x),
+            .y = @floatFromInt(y),
+            .width = @floatFromInt(w),
+            .height = @floatFromInt(h),
+        };
+        ray.DrawRectangleLinesEx(rect, 1, color);
+    }
+};
+
 const Sounds = struct {
     success: ray.Sound,
     failed: ray.Sound,
@@ -133,7 +147,7 @@ const Game = struct {
     fn drawBoard(self: *Game) void {
         const g = &geometry;
         const s = g.tile_size * @as(Pos, @splat(4));
-        ray.DrawRectangleLines(g.top_left[0], g.top_left[1], s[0], s[1], ray.WHITE);
+        fixes.DrawRectangleLines(g.top_left[0], g.top_left[1], s[0], s[1], ray.WHITE);
 
         var solved = true;
         var i: u8 = 0;
@@ -178,7 +192,7 @@ const Game = struct {
             const p2 = p1 + margin;
             const s2 = g.tile_size - margin * PosTwo;
 
-            ray.DrawRectangleLines(p2[0], p2[1], s2[0], s2[1], c1);
+            fixes.DrawRectangleLines(p2[0], p2[1], s2[0], s2[1], c1);
 
             const p_center = p1 + g.tile_size / PosTwo;
             const half_extent = getExtent(text, g.font_small) / PosTwo;
