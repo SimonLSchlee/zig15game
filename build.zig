@@ -6,6 +6,7 @@ fn addAssets(b: *std.Build, exe: *std.Build.Step.Compile) void {
         .{ "assets/movesuccess.qoa", "movesuccess" },
         .{ "assets/movefailed.qoa", "movefailed" },
         .{ "assets/winner.qoa", "winner" },
+        .{ "assets/barrierhit.qoa", "barrierhit" },
     };
 
     for (assets) |asset| {

@@ -22,6 +22,7 @@ const Sounds = struct {
     success: ray.Sound,
     failed: ray.Sound,
     winner: ray.Sound,
+    barrierhit: ray.Sound,
     enabled: bool = true,
 
     fn init() Sounds {
@@ -29,6 +30,7 @@ const Sounds = struct {
             .success = loadSound(@embedFile("movesuccess"), 0.5, "movesuccess.qoa"),
             .failed = loadSound(@embedFile("movefailed"), 0.5, "movefailed.qoa"),
             .winner = loadSound(@embedFile("winner"), 1.0, "winner.qoa"),
+            .barrierhit = loadSound(@embedFile("barrierhit"), 1.0, "barrierhit.qoa"),
         };
     }
     fn deinit(self: *Sounds) void {
@@ -60,13 +62,22 @@ const colors = struct {
     const correct = color(202, 255, 191);
     const solved = color(253, 255, 182);
 
+    const barrier = colora(237, 190, 21, 180);
+    const barrier_hit = colora(237, 40, 21, 180);
+
     fn color(r: u8, g: u8, b: u8) ray.Color {
         return .{ .r = r, .g = g, .b = b, .a = 255 };
+    }
+    fn colora(r: u8, g: u8, b: u8, a: u8) ray.Color {
+        return .{ .r = r, .g = g, .b = b, .a = a };
     }
 };
 
 const Pos = @Vector(2, i32);
+const PosZero: Pos = @splat(0);
+const PosOne: Pos = @splat(1);
 const PosTwo: Pos = @splat(2);
+const PosInv: Pos = @splat(-1);
 
 const Geometry = struct {
     size: Pos,
@@ -112,6 +123,8 @@ const Game = struct {
 
     empty: u8 = empty_token,
     cells: [16]u8,
+    barriers: [24]bool = [1]bool{false} ** 24,
+    hit_barrier: ?u8 = null,
     invalid: bool = false,
     won: bool = false,
 
@@ -125,6 +138,38 @@ const Game = struct {
             g.cells[n] = n;
         }
         return g;
+    }
+    fn addSomeBarriers(self: *Game) void {
+        var random = std.rand.DefaultPrng.init(@intCast(std.time.microTimestamp()));
+        const rand = random.random();
+        for (&self.barriers) |*dest| {
+            if (rand.uintLessThan(u8, 10) == 0) {
+                dest.* = true;
+            }
+        }
+    }
+    fn hitBarrier(self: *Game, empty: u8, new_empty: u8) bool {
+        const old = indexToCord(empty);
+        const new = indexToCord(new_empty);
+        const dir = old - new;
+        const inverted = dir * PosInv;
+
+        const horizontal = inverted[0] == 0;
+        const delta: i32 = if (horizontal) inverted[1] else inverted[0];
+
+        const smaller = if (delta < 0) new else old;
+        const transformed = if (horizontal) smaller else Pos{ smaller[1], smaller[0] };
+
+        const start = if (horizontal) 0 else self.barriers.len / 2;
+        const offset: u8 = @intCast(if (horizontal) transformed[0] + transformed[1] * 4 else transformed[0] * 3 + transformed[1]);
+        const barrier_index = start + offset;
+
+        const res = self.barriers[barrier_index];
+        self.hit_barrier = if (res) @intCast(barrier_index) else null;
+        return res;
+    }
+    fn indexToCord(index: u8) Pos {
+        return .{ index % 4, index / 4 };
     }
 
     fn partySequence(self: *Game) void {
@@ -167,12 +212,50 @@ const Game = struct {
             }
             if (i != self.cells[i]) solved = false;
         }
+        self.drawBarriers();
 
         if (solved) {
             self.won = true;
             self.partySequence();
             drawCenteredText("** You did it! **", g.top_line, g.font_big, colors.solved);
             drawCenteredText("Enter / F5: new game", g.bottom_line, g.font_small, colors.solved);
+        }
+    }
+
+    fn drawBarriers(self: *Game) void {
+        const g = &geometry;
+
+        const s = 2;
+        const ts = g.tile_size[0];
+
+        var x: u8 = 0;
+        var y: u8 = 0;
+        for (self.barriers, 0..) |b, i| {
+            const half = self.barriers.len / 2;
+            const horizontal = i < half;
+
+            var color = colors.barrier;
+            if (self.hit_barrier != null and self.hit_barrier.? == i) color = colors.barrier_hit;
+            if (b) {
+                const p0 = g.top_left + Pos{ x, y } * g.tile_size;
+                if (horizontal) {
+                    const p1 = p0 + Pos{ 0, ts - s };
+                    ray.DrawRectangle(p1[0], p1[1], ts, s * 2, color);
+                } else {
+                    const p1 = p0 + Pos{ ts - s, 0 };
+                    ray.DrawRectangle(p1[0], p1[1], s * 2, ts, color);
+                }
+            }
+
+            const mx: u8, const my: u8 = if (horizontal) .{ 4, 3 } else .{ 3, 4 };
+            x += 1;
+            if (x == mx) {
+                x = 0;
+                y += 1;
+            }
+            if (y == my) {
+                y = 0;
+            }
         }
     }
 
@@ -221,7 +304,7 @@ const Move = enum { no, up, down, left, right };
 const UpdateMode = enum { internal, player };
 fn updateToken(move: Move, mode: UpdateMode) void {
     const empty = game.empty;
-    const newEmpty = switch (move) {
+    const new_empty = switch (move) {
         Move.up => if (empty / 4 < 3) empty + 4 else empty,
         Move.down => if (empty / 4 > 0) empty - 4 else empty,
         Move.left => if (empty % 4 < 3) empty + 1 else empty,
@@ -229,16 +312,22 @@ fn updateToken(move: Move, mode: UpdateMode) void {
         else => return,
     };
 
-    if (empty == newEmpty) {
+    if (empty == new_empty) {
         game.invalid = true;
         if (mode == .player) sounds.playSound(sounds.failed);
-    } else {
-        game.invalid = false;
-        game.cells[empty] = game.cells[newEmpty];
-        game.cells[newEmpty] = empty_token;
-        game.empty = newEmpty;
-        if (mode == .player) sounds.playSound(sounds.success);
+        return;
     }
+    if (game.hitBarrier(empty, new_empty)) {
+        game.invalid = true;
+        if (mode == .player) sounds.playSound(sounds.barrierhit);
+        return;
+    }
+
+    game.invalid = false;
+    game.cells[empty] = game.cells[new_empty];
+    game.cells[new_empty] = empty_token;
+    game.empty = new_empty;
+    if (mode == .player) sounds.playSound(sounds.success);
 }
 
 const KeyMove = struct { c_int, Move };
@@ -277,10 +366,12 @@ fn shuffle(moves: u8) void {
     var random = std.rand.DefaultPrng.init(@intCast(std.time.microTimestamp()));
     const rand = random.random();
     var n: u8 = 0;
-    while (n < moves) {
+    var fuel: u16 = @as(u16, moves) * 10;
+    while (n < moves and fuel > 0) {
         const move: Move = rand.enumValue(Move);
         updateToken(move, .internal);
         if (!game.invalid) n += 1;
+        fuel -= 1;
     }
     game.invalid = false;
 }
@@ -290,7 +381,8 @@ fn win() void {
 }
 fn restart() void {
     game = Game.init();
-    shuffle(50);
+    game.addSomeBarriers();
+    shuffle(250);
 }
 
 fn startGestureDetected() bool {
