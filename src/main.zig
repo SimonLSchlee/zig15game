@@ -401,6 +401,18 @@ fn startGestureDetected() bool {
     return false;
 }
 
+const Scene = enum {
+    start,
+    pause,
+    game,
+
+    pub fn running(self: Scene) bool {
+        return self == .game;
+    }
+    pub fn stopped(self: Scene) bool {
+        return self != .game;
+    }
+};
 pub fn main() !void {
     const default_size = 400;
     const width = default_size;
@@ -420,8 +432,7 @@ pub fn main() !void {
     sounds = Sounds.init();
     defer sounds.deinit();
 
-    var started = false;
-    var paused = false;
+    var scene: Scene = .start;
 
     restart();
 
@@ -433,13 +444,12 @@ pub fn main() !void {
             if (!ray.IsAudioDeviceReady()) {
                 // Firefox disables audio playback until user interaction
                 // pause game to get user interaction
-                paused = true;
+                scene = .pause;
                 break :input;
             }
-            if (!started or paused) {
+            if (scene.stopped()) {
                 if (startGestureDetected()) {
-                    started = true;
-                    paused = false;
+                    scene = .game;
                 } else {
                     break :input;
                 }
@@ -469,15 +479,17 @@ pub fn main() !void {
             if (help) {
                 drawHelp();
             } else {
-                if (started) {
-                    if (paused) {
+                switch (scene) {
+                    .start => {
+                        Game.drawCenteredText("Start Game!", geometry.top_line, geometry.font_big, colors.solved);
+                        Game.drawCenteredText("Enter / Click", geometry.bottom_line, geometry.font_big, colors.solved);
+                    },
+                    .pause => {
                         Game.drawCenteredText("Paused", geometry.top_line, geometry.font_big, colors.solved);
-                    } else {
+                    },
+                    .game => {
                         game.drawBoard();
-                    }
-                } else {
-                    Game.drawCenteredText("Start Game!", geometry.top_line, geometry.font_big, colors.solved);
-                    Game.drawCenteredText("Enter / Click", geometry.bottom_line, geometry.font_big, colors.solved);
+                    },
                 }
             }
         }
