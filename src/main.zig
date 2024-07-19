@@ -37,6 +37,7 @@ const Sounds = struct {
         ray.UnloadSound(self.success);
         ray.UnloadSound(self.failed);
         ray.UnloadSound(self.winner);
+        ray.UnloadSound(self.barrierhit);
     }
     fn loadSound(comptime data: anytype, volume: f32, export_name: [:0]const u8) ray.Sound {
         _ = export_name; // autofix
@@ -472,6 +473,16 @@ pub fn main() !void {
     defer sounds.deinit();
 
     var scene: Scene = .start;
+    var show_qrcode = false;
+    const qrcode_data = @embedFile("qrcode");
+    const qrcode = ray.LoadImageFromMemory(".png", qrcode_data.ptr, qrcode_data.len);
+    defer ray.UnloadImage(qrcode);
+
+    const qrcode_size = Pos{ qrcode.width, qrcode.height };
+
+    const qrcode_texture = ray.LoadTextureFromImage(qrcode);
+    defer ray.UnloadTexture(qrcode_texture);
+    ray.SetTextureFilter(qrcode_texture, ray.TEXTURE_FILTER_POINT);
 
     restart();
 
@@ -489,6 +500,9 @@ pub fn main() !void {
                     if (pos[0] < geometry.thirds[0]) {
                         help = !help;
                         break :input;
+                    }
+                    if (help and geometry.thirds[1] < pos[0]) {
+                        show_qrcode = !show_qrcode;
                     }
                 }
             }
@@ -532,11 +546,25 @@ pub fn main() !void {
             ray.ClearBackground(colors.background);
 
             const ts = geometry.top_spacing;
+            const vs = @divTrunc(geometry.font_smaller, 2);
+            const y1 = ts + vs;
             ray.DrawText("F1: help", ts, ts, geometry.font_smaller, colors.normal);
-            const p1 = Pos{ geometry.center[0], ts + @divTrunc(geometry.font_smaller, 2) };
+            const p1 = Pos{ geometry.center[0], y1 };
             Game.drawCenteredText("restart", p1, geometry.font_smaller, colors.normal);
+
             if (help) {
                 drawHelp();
+
+                const third = geometry.thirds[0];
+                const x2 = @divTrunc(third * 5, 2);
+                const p2 = Pos{ x2, y1 };
+                const tint = if (show_qrcode) colors.correct else colors.normal;
+                Game.drawCenteredText("qrcode", p2, geometry.font_smaller, tint);
+
+                if (show_qrcode) {
+                    const p3 = geometry.center - @divTrunc(qrcode_size, PosTwo);
+                    ray.DrawTexture(qrcode_texture, p3[0], p3[1], ray.WHITE);
+                }
             } else {
                 switch (scene) {
                     .start => {
