@@ -80,6 +80,10 @@ const PosOne: Pos = @splat(1);
 const PosTwo: Pos = @splat(2);
 const PosInv: Pos = @splat(-1);
 
+fn posToVector2(pos: Pos) ray.Vector2 {
+    return .{ .x = @floatFromInt(pos[0]), .y = @floatFromInt(pos[1]) };
+}
+
 const Geometry = struct {
     size: Pos,
     top_left: Pos,
@@ -478,8 +482,6 @@ pub fn main() !void {
     const qrcode = ray.LoadImageFromMemory(".png", qrcode_data.ptr, qrcode_data.len);
     defer ray.UnloadImage(qrcode);
 
-    const qrcode_size = Pos{ qrcode.width, qrcode.height };
-
     const qrcode_texture = ray.LoadTextureFromImage(qrcode);
     defer ray.UnloadTexture(qrcode_texture);
     ray.SetTextureFilter(qrcode_texture, ray.TEXTURE_FILTER_POINT);
@@ -562,8 +564,18 @@ pub fn main() !void {
                 Game.drawCenteredText("qrcode", p2, geometry.font_smaller, tint);
 
                 if (show_qrcode) {
-                    const p3 = geometry.center - @divTrunc(qrcode_size, PosTwo);
-                    ray.DrawTexture(qrcode_texture, p3[0], p3[1], ray.WHITE);
+                    const spacing = Pos{ 40, geometry.top_bar * 2 };
+                    const inner_size = geometry.size - spacing;
+                    const min_size = @min(inner_size[0], inner_size[1]);
+
+                    const qrcode_size = Pos{ qrcode.width, qrcode.height };
+                    const max_size = @max(qrcode_size[0], qrcode_size[1]);
+
+                    const scale = @divTrunc(min_size, max_size);
+                    const qrcode_pixel_size = qrcode_size * @as(Pos, @splat(scale));
+
+                    const p3 = geometry.center - @divTrunc(qrcode_pixel_size, PosTwo);
+                    ray.DrawTextureEx(qrcode_texture, posToVector2(p3), 0, @floatFromInt(scale), ray.WHITE);
                 }
             } else {
                 switch (scene) {
