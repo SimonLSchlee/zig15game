@@ -5,6 +5,15 @@ changed from a console/terminal implementation to a [raylib](https://www.raylib.
 Added simple raylib gui and sound effects.  
 If you are a vim user (or want to train vim keys) play with hjkl, otherwise use wasd or arrow keys!
 
+## Play
+
+[![Game screenshot](media/screenshot000.png)](https://simonlschlee.github.io/zig15game/)  
+https://simonlschlee.github.io/zig15game/
+
+## Discussion
+Ziggit topic for discussion: https://ziggit.dev/t/raylib-15-game/5233  
+If you have ideas for improvements you can use ziggit or open an issue!
+
 ## install
 ```bash
 git clone https://github.com/SimonLSchlee/zig15game.git
