@@ -37,6 +37,7 @@ const Sounds = struct {
         ray.UnloadSound(self.success);
         ray.UnloadSound(self.failed);
         ray.UnloadSound(self.winner);
+        ray.UnloadSound(self.barrierhit);
     }
     fn loadSound(comptime data: anytype, volume: f32, export_name: [:0]const u8) ray.Sound {
         _ = export_name; // autofix
