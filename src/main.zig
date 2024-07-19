@@ -86,6 +86,13 @@ const Geometry = struct {
     center: Pos,
     top_line: Pos,
     bottom_line: Pos,
+
+    top_spacing: i32,
+    top_bar: i32,
+    thirds: [2]i32,
+
+    font_smaller_h: i32,
+
     font_smaller: i32,
     font_small: i32,
     font_big: i32,
@@ -99,11 +106,21 @@ const Geometry = struct {
         const horizontal = @divFloor(w, 5);
         const part = @min(vertical, horizontal);
 
+        g.font_smaller_h = @max(20, @divTrunc(horizontal, 8) * 2);
+
         g.font_smaller = @max(20, @divTrunc(part, 6) * 2);
         g.font_small = @divTrunc(part, 6) * 4;
         g.font_big = @divTrunc(g.font_small * 3, 2);
 
+        // constrain _h to not grow bigger then the normal one
+        g.font_smaller_h = @min(g.font_smaller_h, g.font_smaller);
+
         g.tile_size = @splat(part);
+
+        g.top_spacing = 10;
+        g.top_bar = g.top_spacing * 2 + g.font_smaller;
+        g.thirds[0] = @divTrunc(w, 3);
+        g.thirds[1] = g.thirds[0] * 2;
 
         const half = g.tile_size * PosTwo;
         g.center = Pos{ @divTrunc(w, 2), @divTrunc(h, 2) };
@@ -114,6 +131,29 @@ const Geometry = struct {
     }
 };
 var geometry: Geometry = undefined;
+
+fn touchCoord() Pos {
+    const fpos = ray.GetTouchPosition(0);
+    return Pos{
+        @intFromFloat(fpos.x),
+        @intFromFloat(fpos.y),
+    };
+}
+
+fn tapOrClickCoord() ?Pos {
+    const gesture = ray.GetGestureDetected();
+    const touches = ray.GetTouchPointCount();
+    if (gesture == ray.GESTURE_TAP and touches == 1) return touchCoord();
+
+    if (ray.IsMouseButtonPressed(ray.MOUSE_LEFT_BUTTON)) {
+        const mpos = ray.GetMousePosition();
+        return Pos{
+            @intFromFloat(mpos.x),
+            @intFromFloat(mpos.y),
+        };
+    }
+    return null;
+}
 
 const tokens = [16][:0]const u8{ "1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15", "" };
 const empty_token = 15;
@@ -387,7 +427,6 @@ fn restart() void {
 
 fn startGestureDetected() bool {
     if (ray.IsKeyPressed(ray.KEY_ENTER)) return true;
-    if (ray.IsKeyPressed(ray.KEY_SPACE)) return true;
     if (ray.IsKeyPressed(ray.KEY_S)) return true;
 
     if (ray.IsMouseButtonPressed(ray.MOUSE_BUTTON_LEFT)) return true;
@@ -438,8 +477,27 @@ pub fn main() !void {
 
     var help = false;
     while (!ray.WindowShouldClose()) {
+        if (ray.IsWindowResized()) geometry.updateSize();
+
         input: { // input
-            if (ray.IsWindowResized()) geometry.updateSize();
+            if (tapOrClickCoord()) |pos| {
+                if (pos[1] < geometry.top_bar) {
+                    if (geometry.thirds[0] < pos[0] and pos[0] < geometry.thirds[1]) {
+                        restart();
+                        break :input;
+                    }
+                    if (pos[0] < geometry.thirds[0]) {
+                        help = !help;
+                        break :input;
+                    }
+                }
+            }
+            if (ray.IsKeyPressed(ray.KEY_F1)) {
+                help = !help;
+                break :input;
+            }
+            if (ray.IsKeyPressed(ray.KEY_P)) sounds.toggle();
+            if (ray.IsKeyPressed(ray.KEY_SPACE)) game.partyMore();
 
             if (!ray.IsAudioDeviceReady()) {
                 // Firefox disables audio playback until user interaction
@@ -455,7 +513,6 @@ pub fn main() !void {
                 }
             }
 
-            if (ray.IsKeyPressed(ray.KEY_F1)) help = !help;
             if (!help) {
                 if (ray.IsKeyPressed(ray.KEY_F3)) win();
                 if (ray.IsKeyPressed(ray.KEY_F5)) restart();
@@ -466,8 +523,6 @@ pub fn main() !void {
                     updateToken(getMove(), .player);
                 }
             }
-            if (ray.IsKeyPressed(ray.KEY_P)) sounds.toggle();
-            if (ray.IsKeyPressed(ray.KEY_SPACE)) game.partyMore();
         }
 
         { // draw
@@ -475,7 +530,11 @@ pub fn main() !void {
             defer ray.EndDrawing();
 
             ray.ClearBackground(colors.background);
-            ray.DrawText("F1: help", 10, 10, geometry.font_smaller, colors.normal);
+
+            const ts = geometry.top_spacing;
+            ray.DrawText("F1: help", ts, ts, geometry.font_smaller, colors.normal);
+            const p1 = Pos{ geometry.center[0], ts + @divTrunc(geometry.font_smaller, 2) };
+            Game.drawCenteredText("restart", p1, geometry.font_smaller, colors.normal);
             if (help) {
                 drawHelp();
             } else {
@@ -497,7 +556,7 @@ pub fn main() !void {
 }
 
 fn drawHelp() void {
-    const fs = geometry.font_smaller;
+    const fs = geometry.font_smaller_h;
 
     const longest_string = "   by raylib technologies";
     const x_extent = fs * 5 + ray.MeasureText(longest_string, fs);
@@ -510,6 +569,8 @@ fn drawHelp() void {
     const x = tl[0];
     var y: i32 = tl[1];
 
+    const sp = 8;
+
     _ = drawLines(x, y, fs, colors.normal, .{
         "w a s d:",
         "h j k l:",
@@ -519,7 +580,7 @@ fn drawHelp() void {
         "F5 / Enter:",
         "P:",
     });
-    y = drawLines(x + fs * 10, y, fs, colors.normal, .{
+    y = drawLines(x + fs * sp, y, fs, colors.normal, .{
         "move",
         "move",
         "move",
@@ -535,10 +596,10 @@ fn drawHelp() void {
         "",
         "terminal version:",
         "",
-        "raylib version:",
+        "gui version:",
     });
-    y += fs * 2;
-    y = drawLines(x + fs * 10, y, fs, ray.WHITE, .{
+    y += fs * 3;
+    y = drawLines(x + fs * sp, y, fs, ray.WHITE, .{
         "Chris Boesch",
         "",
         "Simon L Schlee",
