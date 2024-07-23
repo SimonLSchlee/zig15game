@@ -80,6 +80,9 @@ const PosOne: Pos = @splat(1);
 const PosTwo: Pos = @splat(2);
 const PosInv: Pos = @splat(-1);
 
+const BarrierPart = 30; // g.tile_size[0] / BarrierPart
+const BarrierPos: Pos = @splat(@divTrunc(BarrierPart, 2));
+
 fn posToVector2(pos: Pos) ray.Vector2 {
     return .{ .x = @floatFromInt(pos[0]), .y = @floatFromInt(pos[1]) };
 }
@@ -270,8 +273,8 @@ const Game = struct {
     fn drawBarriers(self: *Game) void {
         const g = &geometry;
 
-        const s = 2;
         const ts = g.tile_size[0];
+        const s = @divTrunc(ts, BarrierPart);
 
         var x: u8 = 0;
         var y: u8 = 0;
@@ -320,7 +323,7 @@ const Game = struct {
             const p0 = g.top_left + Pos{ x, y } * g.tile_size;
             const p1 = p0;
 
-            const margin: Pos = @splat(5);
+            const margin: Pos = @divTrunc(g.tile_size, BarrierPos);
             const p2 = p1 + margin;
             const s2 = g.tile_size - margin * PosTwo;
 
