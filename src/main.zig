@@ -477,7 +477,7 @@ pub fn main() !void {
 
     ray.InitAudioDevice();
     defer ray.CloseAudioDevice();
-    ray.SetMasterVolume(0.1);
+    ray.SetMasterVolume(0.15);
 
     sounds = Sounds.init();
     defer sounds.deinit();
