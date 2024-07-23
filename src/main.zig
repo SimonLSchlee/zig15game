@@ -14,7 +14,7 @@ const fixes = struct {
             .width = @floatFromInt(w),
             .height = @floatFromInt(h),
         };
-        ray.DrawRectangleLinesEx(rect, 1, color);
+        ray.DrawRectangleLinesEx(rect, @floatFromInt(geometry.line_thickness), color);
     }
 };
 
@@ -95,6 +95,8 @@ const Geometry = struct {
     top_line: Pos,
     bottom_line: Pos,
 
+    line_thickness: i32,
+
     top_spacing: i32,
     top_bar: i32,
     thirds: [2]i32,
@@ -123,6 +125,7 @@ const Geometry = struct {
         // constrain _h to not grow bigger then the normal one
         g.font_smaller_h = @min(g.font_smaller_h, g.font_smaller);
 
+        g.line_thickness = @max(1, @divTrunc(part, 60));
         g.tile_size = @splat(part);
 
         g.top_spacing = 10;
