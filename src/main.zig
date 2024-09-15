@@ -468,6 +468,18 @@ pub fn main() !void {
     const width = default_size;
     const height = default_size;
 
+    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+    defer _ = gpa.deinit();
+    const allocator = gpa.allocator();
+
+    const number = try allocator.create(i32);
+    defer allocator.destroy(number);
+
+    number.* = 5;
+    ray.TraceLog(ray.LOG_INFO, "number is %i", number.*);
+    number.* = 33;
+    ray.TraceLog(ray.LOG_INFO, "number is %i", number.*);
+
     ray.SetConfigFlags(ray.FLAG_VSYNC_HINT | ray.FLAG_WINDOW_RESIZABLE);
     ray.InitWindow(width, height, "15 Game");
     defer ray.CloseWindow();

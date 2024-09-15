@@ -85,9 +85,7 @@ pub fn build(b: *std.Build) void {
             .optimize = optimize,
             .link_libc = true,
         });
-        // exe_lib.shared_memory = true;
-        // TODO currently deactivated because it seems as if it doesn't work with local hosting debug workflow
-        exe_lib.shared_memory = false;
+        exe_lib.shared_memory = true;
         exe_lib.root_module.single_threaded = false;
 
         exe_lib.linkLibrary(raylib_artifact);
@@ -114,15 +112,16 @@ pub fn build(b: *std.Build) void {
             "-sUSE_GLFW=3",
             "-O3",
 
-            // "-sAUDIO_WORKLET=1",
-            // "-sWASM_WORKERS=1",
+            "-sAUDIO_WORKLET=1",
+            "-sWASM_WORKERS=1",
 
             "-sASYNCIFY",
-            // TODO currently deactivated because it seems as if it doesn't work with local hosting debug workflow
             // "-pthread",
             // "-sPTHREAD_POOL_SIZE=4",
 
-            "-sINITIAL_MEMORY=167772160",
+            "-sSHARED_MEMORY=1",
+            "-sALLOW_MEMORY_GROWTH=1",
+
             //"-sEXPORTED_FUNCTIONS=_main,__builtin_return_address",
 
             // USE_OFFSET_CONVERTER required for @returnAddress used in
